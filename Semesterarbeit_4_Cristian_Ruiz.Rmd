@@ -1,0 +1,429 @@
+---
+title: "Semesterarbeit_4_Cristian_Ruiz_1"
+output:
+  html_document: default
+  pdf_document: default
+date: "2024-01-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Teil 1
+
+## Einleitung
+
+Bei der Planung vom Sale (Ausverkauf) bei der Jelmoli AG wird oft diskutiert, ob ein grösseres Angebot an stark rabattierten Artikeln, insbesondere zu Beginn des Sales, zu einer Umsatzsteigerung führen könnte. Es wird angenommen, dass Artikel mit hohen Rabatten eine bessere Verkaufsleistung zeigen, obwohl dies nicht unbedingt einen höheren Umsatz bedeutet, da der Rabatt den Ertrag beeinflusst. Diese Analyse zielt nicht darauf ab, die finanzielle Tragfähigkeit eines solchen Angebots zu bewerten, sondern vielmehr zu ermitteln, ob nichtrabattierte Artikel wirklich eine deutlich schlechtere Verkaufshäufigkeit aufweisen als hochrabttierte Artikel. Dafür werden Daten vom ersten Verkaufstag des Sales, dem 27. Dezember, in der Jelmoli-Filiale an der Zürcher Bahnhofstrasse verwendet.
+
+Die Methodik umfasst:
+
+**1. Kategorisierung und Visualisierung der Rabatte:** Artikel werden basierend auf ihrem Rabattsatz kategorisiert und in einem Histogramm visualisiert, um die Verteilung zu analysieren.
+
+**2. Auswahl der Verteilung:** Bestimmung einer passenden theoretischen Verteilung für nichtrabttierte Artikel und Vergleich dieser mit der tatsächlichen Verteilung.
+
+**3. Goodness-of-Fit-Test:** Durchführung eines 𝜒²-Goodness-of-Fit-Tests, um die Eignung der gewählten Verteilung zu beurteilen und die Hypothese zu testen, dass nichtrabattierte Artikel deutlich schlechtere Verkaufsleistung zeigen.
+
+
+## Laden der Pakete
+
+```{r}
+# Pakete laden
+library(ggplot2)
+library(dplyr)
+library(readxl)
+library(stats)
+library(tidyr)
+
+```
+
+
+## Daten laden und vorbereiten
+
+Um die Beziehung zwischen Rabatten und Verkaufsleistung bei Jelmoli am 27.12.23 zu untersuchen, werden die Rabattdaten in vier einfache Kategorien eingeteilt: "nicht reduziert", "niedrig", "mittel" und "hoch". Diese Einteilung hilft mir zu verstehen, ob höhere Rabatte tatsächlich zu einem besseren Absatz führen. Durch die Gruppierung der Rabatte kann klarer gesehen werden, welche Rabattstufen den grössten Einfluss auf den Verkauf haben. Hierfür möchte ich den Lagerbestandsabbau in % sehen. Diese Vorbereitungen bilden die Basis für den 𝜒²-Goodness-of-Fit-Test und ermöglicht es, Erkenntnisse über die Effektivität der Rabattstrategien zu gewinnen.
+
+```{r}
+# Daten laden
+daten_1 <- read_excel("/Users/cristianruiz/Desktop/CAS/R/Semesterarbeit 4/Sale_Sport_27.12.2023.xlsx")
+
+# Daten prüfen
+head(daten_1)
+
+# Datenbereinigung und Transformation mit Lagerbestandsabbau in %
+daten_1 <- daten_1 %>%
+  filter(!is.na(`Aktueller Rabatt`) & !is.na(Absatz) & !is.na(`Anfangsbestand Menge`)) %>%  # Zeilen mit fehlenden Werten entfernen
+  mutate(
+    LagerbestandsabbauProzent = (Absatz / `Anfangsbestand Menge`) * 100  # Lagerbestandsabbau in Prozent berechnen
+  ) %>%
+  filter(LagerbestandsabbauProzent <= 100 & LagerbestandsabbauProzent >= 0) %>%  # Nur realistische Werte behalten
+  mutate(
+    RabattKategorie = case_when(
+      `Aktueller Rabatt` == 0 ~ "nicht reduziert",
+      `Aktueller Rabatt` <= -0.7 ~ "hoch",
+      `Aktueller Rabatt` <= -0.5 ~ "mittel",
+      `Aktueller Rabatt` < 0 ~ "niedrig",
+      TRUE ~ as.character(NA)  # Für den Fall, dass keine der Bedingungen zutrifft
+    )
+  ) %>%
+  drop_na(RabattKategorie)  # Zeilen entfernen, die keine Rabattkategorie haben
+
+
+```
+
+## Häufigkeitsverteilung als Histogramm
+
+Erstellung des Histogramms der Rabattkategorien, um die Häufigkeitsverteilung zu visualisieren.
+
+```{r}
+ggplot(daten_1, aes(x = RabattKategorie)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  
+  labs(x = "Rabattkategorie", y = "Häufigkeit", title = "Histogramm 1: Rabattkategorien") +
+  theme_minimal()
+
+```
+
+
+Die Daten zeigen, wie vermutet, dass der Anteil der hochrabattierten Artikel vergleichsweise gering ist, während der Anteil der nichtreduzierten Artikel am höchsten ausfällt. Um einen detaillierten Einblick in den durchschnittlichen Lagerabbau in Prozent zu erhalten, betrachten wir die nachfolgende Grafik. Diese visualisiert den durchschnittlichen Lagerbestandsabbau, aufgeschlüsselt nach den einzelnen Rabattkategorien (Histogramm 2: Durchschnittlicher Lagerbestandsabbau nach Rabattkategorie).
+
+
+```{r}
+
+# Durchschnittlichen Lagerbestandsabbau für jede Rabattkategorie berechnen
+durchschnittlicher_abbauprozentsatz <- daten_1 %>%
+  group_by(RabattKategorie) %>%
+  summarise(DurchschnittlicherAbbau = mean(LagerbestandsabbauProzent))
+
+# Balkendiagramm des durchschnittlichen Lagerbestandsabbaus 
+ggplot(durchschnittlicher_abbauprozentsatz, aes(x = RabattKategorie, y = DurchschnittlicherAbbau, fill = RabattKategorie)) +
+  geom_bar(stat = "identity", color = "black") +
+  labs(x = "Rabattkategorie", y = "Durchschnittlicher Lagerbestandsabbau in Prozent", title = "Histogramm 2: Durchschnittlicher Lagerbestandsabbau nach Rabattkategorie") +
+  theme_minimal()
+
+```
+
+Es wird deutlich, dass der durchschnittliche Lagerabbau in Prozent mit zunehmendem Rabattsatz steigt.
+
+## Theoretische vs tatsächliche Verteilung und der 𝜒2-goodness of fit Test
+
+Zunächst betrachten wir die Verteilung der Lagerbestandsabbau-Prozentsätze über alle Rabattkategorien hinweg. Dies wird in der nachfolgenden Grafik dargestellt (Histogramm 3: Erwartete Verteilung des Lagerbestandsabbaus).
+
+```{r}
+
+# ggplot für die tatsächliche Verteilung
+ggplot(daten_1, aes(x = LagerbestandsabbauProzent)) +
+  geom_density(aes(fill = RabattKategorie), alpha = 0.5) +
+  scale_x_continuous(name = "Lagerbestandsabbau in Prozent", 
+                     limits = c(5, max(daten_1$LagerbestandsabbauProzent, na.rm = TRUE))) +
+  scale_y_continuous(name = "Dichte") +
+  labs(title = "Histogramm 3: Erwartete Verteilung des Lagerbestandsabbaus") +
+  theme_minimal()
+
+```
+Die Analyse bestätigt erneut, dass Artikel mit geringen oder keinen Rabatten tendenziell in den niedrigeren Prozentbereichen des Lagerabbaus zu finden sind. Im Gegensatz dazu zeigt die Kategorie 'hoch' eine Linksschiefe, was auf eine höhere Anzahl an Verkäufen mit grossen Lagerabbau-Prozentsätzen hinweist.
+
+Bei der genaueren Betrachtung der Kategorie 'nicht reduziert' fällt auf, dass die Verteilung des Lagerabbaus Merkmale einer Log-Normalverteilung aufweist – sie ähnelt einer Normalverteilung, weist jedoch eine Rechtsschiefe auf. Um dies weiter zu untersuchen, wird nachfolgend ein Histogramm erstellt, das die tatsächliche Verteilung mit einer theoretischen Log-Normalverteilung vergleicht.
+
+```{r}
+# Filtern der Kategorie "nicht reduziert" und Entfernen von Zeilen mit Null-, Negativ- oder ungültigen Werten
+daten_nicht_rabattiert <- daten_1 %>%
+  filter(RabattKategorie == "nicht reduziert" & 
+         LagerbestandsabbauProzent > 0 & 
+         !is.infinite(LagerbestandsabbauProzent) & 
+         !is.na(LagerbestandsabbauProzent))
+
+# Berechnung der Parameter für die Log-Normalverteilung, nachdem Null- oder Negativwerte ausgeschlossen wurden
+log_daten <- log(daten_nicht_rabattiert$LagerbestandsabbauProzent)
+mittelwert_log <- mean(log_daten, na.rm = TRUE)
+standardabweichung_log <- sd(log_daten, na.rm = TRUE)
+
+# Erstellen des Plots mit Achsenbegrenzung für eine deutlichere Ansicht
+ggplot(daten_nicht_rabattiert, aes(x = LagerbestandsabbauProzent)) +
+  geom_density(aes(y = ..density..), fill = "skyblue", alpha = 0.5) +
+  stat_function(fun = dlnorm, args = list(meanlog = mittelwert_log, sdlog = standardabweichung_log),
+                color = "red", linetype = "dashed", size = 1) +
+  scale_x_continuous(name = "Lagerbestandsabbau in Prozent", 
+                     limits = c(5, max(daten_nicht_rabattiert$LagerbestandsabbauProzent, na.rm = TRUE))) +
+  scale_y_continuous(name = "Dichte") +
+  labs(title = "Histogramm 4: Tatsächliche vs. Theoretische Log-Normalverteilung für 'nicht reduzierte' Artikel") +
+  theme_minimal()
+
+
+
+```
+
+Das gezeigte Histogramm verdeutlicht, dass die theoretische Log-Normalverteilung ebenfalls eine Rechtsschiefe aufweist. Allerdings stimmt sie nicht optimal mit der beobachteten Verteilung überein. Dies könnte ein Hinweis darauf sein, dass die Log-Normalverteilung möglicherweise nicht die passendste Wahl für diese Daten ist.
+
+Um diese Vermutung zu überprüfen, wenden wir als nächsten Schritt den 𝜒²-Goodness-of-Fit-Test an.
+
+```{r}
+
+# Beobachtete Häufigkeiten für "nicht-reduziert" berechnen
+bins <- seq(0, 100, by = 10)
+beobachtet <- hist(daten_nicht_reduziert$LagerbestandsabbauProzent, breaks = bins, plot = FALSE)$counts
+
+# Erwartete Häufigkeiten basierend auf der Log-Normalverteilung berechnen
+erwartet <- rep(0, length(bins)-1)
+for (i in 1:(length(bins)-1)) {
+  erwartet[i] <- plnorm(bins[i+1], meanlog = mittelwert_log, sdlog = standardabweichung_log) -
+                 plnorm(bins[i], meanlog = mittelwert_log, sdlog = standardabweichung_log)
+}
+erwartet <- erwartet * sum(beobachtet) # Anpassen der erwarteten Häufigkeiten
+
+# 𝜒²-Goodness-of-Fit-Test durchführen
+chi_quadrat_test <- chisq.test(beobachtet, p = erwartet, rescale.p = TRUE)
+
+# Ergebnisse
+chi_quadrat_test
+
+```
+
+Die Ergebnisse des Chi-Quadrat-Tests für die beobachteten Daten zeigen ein X-Quadrat von 23.451 mit 9 Freiheitsgraden und einen sehr niedrigen p-Wert von 0.005259. Dies bedeutet, dass die Log-Normalverteilung keine adäquate Übereinstimmung mit den tatsächlichen Daten aufweist. Der niedrige p-Wert führt zur Ablehnung der Nullhypothese, welche besagt, dass die beobachteten Daten der angenommenen Log-Normalverteilung entsprechen. Die signifikante Diskrepanz zwischen der theoretischen und der beobachteten Verteilung weist darauf hin, dass eine andere Verteilung möglicherweise besser geeignet ist.
+
+In Anbetracht der Tatsache, dass die Verteilung sich im Intervall von 0% bis 100% befindet, eine Untergrenze von 0% hat und eine Spitze bei einer bestimmten Dichte zeigt, könnte eine Beta-Verteilung eine passendere theoretische Verteilung sein [Quelle](https://www.statistik-nachhilfe.de/ratgeber/statistik/wahrscheinlichkeitsrechnung-stochastik/wahrscheinlichkeitsverteilungen/stetige-verteilungen/beta-verteilung). Daher wird der nächste Schritt die Schätzung der Parameter für eine Beta-Verteilung sein. Die Parameter werden dabei mit der Methode der Momente geschätzt [Quelle](https://search.r-project.org/CRAN/refmans/EnvStats/html/ebeta.html).
+
+
+
+```{r}
+# Berechnung des Mittelwerts und der Varianz der empirischen Daten
+mittelwert <- mean(daten_nicht_rabattiert$LagerbestandsabbauProzent / 100)
+varianz <- var(daten_nicht_rabattiert$LagerbestandsabbauProzent / 100)
+
+# Schätzen der Parameter der Beta-Verteilung mit der Methode der Momente
+alpha_schaetzung <- ((1 - mittelwert) / varianz - 1 / mittelwert) * mittelwert^2
+beta_schaetzung <- alpha_schaetzung * (1 / mittelwert - 1)
+
+#Plotten der tatsächlichen und der theoretischen Verteilung mit den neuen Parametern
+ggplot(daten_nicht_rabattiert, aes(x = LagerbestandsabbauProzent / 100)) +
+geom_density(aes(y = ..density..), fill = "skyblue", alpha = 0.5) +
+stat_function(fun = dbeta, args = list(shape1 = alpha_schaetzung, shape2 = beta_schaetzung),
+colour = "red", linetype = "dashed", size = 1) +
+labs(title = "Histogramm 5: Tatsächliche vs. Theoretische Beta-Verteilung",
+x = "Lagerbestandsabbau in Prozent", y = "Dichte") +
+theme_minimal()
+  
+
+
+
+```
+
+Wie aus Histogramm 5 ersichtlich, zeigt sich, dass die theoretische Verteilung auch keine Übereinstimmung mit der tatsächlichen Verteilung aufweist. Um diese Beobachtung zu bestätigen, führen wir als nächsten Schritt den 𝜒²-Goodness-of-Fit-Test durch.
+
+```{r}
+
+# Berechnen der beobachteten Häufigkeiten in den Intervallen
+bins <- seq(0, 1, length.out = 11) # 10 Intervalle von 0 bis 1
+beobachtet <- hist(daten_nicht_rabattiert$LagerbestandsabbauProzent / 100, breaks = bins, plot = FALSE)$counts
+
+# Berechnen der erwarteten Häufigkeiten basierend auf der Beta-Verteilung mit den geschätzten Parametern
+erwartet <- rep(0, length(bins)-1)
+for(i in 1:(length(bins)-1)) {
+  erwartet[i] <- pbeta(bins[i+1], shape1 = alpha, shape2 = beta) - pbeta(bins[i], shape1 = alpha, shape2 = beta)
+}
+erwartet <- erwartet * sum(beobachtet) # Anpassen der erwarteten Häufigkeiten an die Gesamtzahl der Beobachtungen
+
+# Durchführen des 𝜒²-Goodness-of-Fit-Tests
+chi_quadrat_test <- chisq.test(beobachtet, p = erwartet, rescale.p = TRUE)
+
+# Ergebnisse ausgeben
+print(chi_quadrat_test)
+
+```
+Die Ergebnisse des Chi-Quadrat-Tests zeigen weiterhin einen extrem niedrigen p-Wert von 2.2e-16. Dies führt zur Ablehnung der Nullhypothese, was bedeutet, dass wir nach einer besser passenden theoretischen Verteilung suchen müssen. Nachdem bereits zwei theoretisch passende Verteilungen untersucht wurden, ist es nun wichtig, die Daten erneut sorgfältig zu überprüfen. Dabei liegt der Fokus darauf, mögliche Anomalien zu identifizieren, die das Ergebnis des 𝜒²-Goodness-of-Fit-Tests beeinflussen könnten.
+
+
+Kontrolle der Daten:
+
+```{r}
+# Allgemeine Überprüfung
+summary(daten_nicht_rabattiert$LagerbestandsabbauProzent)
+
+# Prüfung ob Summe = 0 und somit keine NA Werte vorhanden.
+sum(is.na(daten_nicht_rabattiert$LagerbestandsabbauProzent))
+
+# Begutachtung des Boxplotes
+boxplot(daten_nicht_rabattiert$LagerbestandsabbauProzent, main = "Boxplot 1: LagerbestandsabbauProzent")
+
+```
+Bei genauerer Betrachtung der allgemeinen Daten und der Überprüfung, ob die Summe aller Werte in der Kategorie 'nicht reduziert' Null ergibt, sind keine Anomalien erkennbar. Allerdings zeigt die Analyse des Boxplots, dass es Ausreisser im oberen Bereich gibt. Diese könnten möglicherweise die Ergebnisse des 𝜒²-Goodness-of-Fit-Tests beeinflussen.
+
+Um die Auswirkungen der Ausreisser zu minimieren und die Verteilungsschiefe zu verringern, werde ich als nächsten Schritt eine Logarithmus-Transformation auf die Daten anwenden und die Anpassung an eine Log-Normalverteilung erneut überprüfen.
+
+```{r}
+
+# Filtern der Kategorie "nicht reduziert" und Entfernen von Zeilen mit Null-, Negativ- oder ungültigen Werten
+daten_nicht_rabattiert <- daten_nicht_reduziert %>%
+  filter(RabattKategorie == "nicht reduziert" & 
+         LagerbestandsabbauProzent > 0 & 
+         !is.infinite(LagerbestandsabbauProzent) & 
+         !is.na(LagerbestandsabbauProzent))
+
+# Logarithmus-Transformation der Daten
+log_daten <- log(daten_nicht_rabattiert$LagerbestandsabbauProzent)
+
+# Berechnung der Parameter für die Log-Normalverteilung
+mittelwert_log <- mean(log_daten, na.rm = TRUE)
+standardabweichung_log <- sd(log_daten, na.rm = TRUE)
+
+# Anzahl der Intervalle
+bins <- seq(0, 100, by = 20)
+
+# Beobachtete Häufigkeiten für "nicht-reduziert" berechnen
+beobachtet <- hist(daten_nicht_rabattiert$LagerbestandsabbauProzent, breaks = bins, plot = FALSE)$counts
+
+# Erwartete Häufigkeiten basierend auf der Log-Normalverteilung berechnen
+erwartet <- rep(0, length(bins)-1)
+for (i in 1:(length(bins)-1)) {
+  erwartet[i] <- plnorm(bins[i+1], meanlog = mittelwert_log, sdlog = standardabweichung_log) -
+                 plnorm(bins[i], meanlog = mittelwert_log, sdlog = standardabweichung_log)
+}
+erwartet <- erwartet * sum(beobachtet) # Anpassen der erwarteten Häufigkeiten
+
+# Chi-Quadrat-Goodness-of-Fit-Test durchführen
+chi_quadrat_test <- chisq.test(beobachtet, p = erwartet, rescale.p = TRUE)
+
+# Ergebnisse
+chi_quadrat_test
+
+
+```
+Obwohl der P-Wert immer noch sehr niedrig ist, fällt er im Vergleich zu den vorherigen Tests etwas höher aus. Aufgrund dieser Beobachtung treffe ich die Entscheidung, die Ausreisser aus den Daten zu entfernen. Dies mache ich indem ich die Ausreisser aus dem oberen Bereich des Lagerabbaus in Prozent, also der Bereich von 95% - 100%, ausklammere, was soll dazu beitragen soll, den 𝜒²-Goodness-of-Fit-Test unter klareren Bedingungen durchzuführen und zuverlässigere Ergebnisse zu erzielen.
+
+```{r}
+
+
+# Filtern der Kategorie "nicht reduziert" und Entfernen von Zeilen mit Null-, Negativ- oder ungültigen Werten
+daten_nicht_rabattiert <- daten_nicht_reduziert %>%
+  filter(RabattKategorie == "nicht reduziert" & 
+         LagerbestandsabbauProzent > 0-95 & 
+         !is.infinite(LagerbestandsabbauProzent) & 
+         !is.na(LagerbestandsabbauProzent))
+
+# Logarithmus-Transformation der Daten
+log_daten <- log(daten_nicht_rabattiert$LagerbestandsabbauProzent)
+
+# Berechnung der Parameter für die Log-Normalverteilung
+mittelwert_log <- mean(log_daten, na.rm = TRUE)
+standardabweichung_log <- sd(log_daten, na.rm = TRUE)
+
+# Anzahl der Intervalle
+bins <- seq(0, 100, by = 20)
+
+# Beobachtete Häufigkeiten für "nicht-reduziert" berechnen
+beobachtet <- hist(daten_nicht_rabattiert$LagerbestandsabbauProzent, breaks = bins, plot = FALSE)$counts
+
+# Erwartete Häufigkeiten basierend auf der Log-Normalverteilung berechnen
+erwartet <- rep(0, length(bins)-1)
+for (i in 1:(length(bins)-1)) {
+  erwartet[i] <- plnorm(bins[i+1], meanlog = mittelwert_log, sdlog = standardabweichung_log) -
+                 plnorm(bins[i], meanlog = mittelwert_log, sdlog = standardabweichung_log)
+}
+erwartet <- erwartet * sum(beobachtet) # Anpassen der erwarteten Häufigkeiten
+
+# Chi-Quadrat-Goodness-of-Fit-Test durchführen
+chi_quadrat_test <- chisq.test(beobachtet, p = erwartet, rescale.p = TRUE)
+
+# Ergebnisse
+chi_quadrat_test
+```
+
+Die Ergebnisse des Chi-Quadrat-Tests zeigen ein X-Quadrat von 5.8689 mit 4 Freiheitsgraden und einen p-Wert von 0.2092. Da dieser p-Wert über dem üblichen Signifikanzniveau von 0.05 liegt, gibt es keine ausreichende statistische Grundlage, um die Nullhypothese abzulehnen. Folglich kann davon ausgegangen werden, dass die beobachteten Daten mit der angenommenen theoretischen Verteilung übereinstimmen.
+
+## Fazit
+
+Diese Analyse untersuchte den Zusammenhang zwischen Rabatten und Verkaufsleistung bei der Jelmoli AG, wobei der Fokus darauf lag zu bestimmen, ob nicht rabattierte Artikel im Vergleich zu rabattierten Artikeln eine signifikant schlechtere Verkaufshäufigkeit aufweisen. Durch die Kategorisierung der Rabatte und die anschliessende Visualisierung in Histogrammen konnten interessante Einblicke in die Verteilung des Lagerbestandsabbaus gewonnen werden. Es zeigte sich, dass der durchschnittliche Lagerabbau mit zunehmendem Rabattsatz deutlich steigt.
+
+In der weiteren Analyse wurde versucht, die beobachteten Daten mit verschiedenen theoretischen Verteilungen abzugleichen. Sowohl die Log-Normalverteilung als auch die Beta-Verteilung erwiesen sich zunächst als nicht passend, wie die Ergebnisse der 𝜒²-Goodness-of-Fit-Tests zeigten. Eine detailliertere Betrachtung der Daten, insbesondere der Ausreisser, und die Anwendung einer Logarithmus-Transformation führten schliesslich zu einer besseren Übereinstimmung mit der Log-Normalverteilung.
+
+
+# Teil 2
+
+## Einleitung
+
+Im Rahmen der explorativen Datenanalyse ist es oft nützlich, den Zusammenhang zwischen verschiedenen metrischen Variablen zu untersuchen. Ein gängiges Verfahren hierfür ist die lineare Einfachregression, bei der der lineare Zusammenhang zwischen einer abhängigen und einer unabhängigen Variablen modelliert wird. Diese Analyse wird ergänzt durch diagnostische Plots und die Bestimmung von Vertrauensintervallen, um die Qualität und Zuverlässigkeit des Modells zu beurteilen.
+
+
+
+### a) Auswahl eines Datensatzes und Darstellung einer Matrix mit Streudiagrammen und Korrelationskoeffizienten 
+
+Zunächst wird ein geeigneter Datensatz ausgewählt. In vorliegender Arbeit wurde der Datensatz `mtcars` verwendet, ein eingebauter Datensatz in R, der verschiedene Merkmale von Autos enthält. Aus diesem Datensatz wurden die metrischen Variablen "mpg" (Meilen pro Gallone), "hp" (Pferdestärken), "wt" (Gewicht) und "qsec" (Zeit bis 1/4 Meile) ausgewählt. Mit Hilfe des `GGally` Pakets und der Funktion `ggpairs` wird eine Matrix von Streudiagrammen erstellt, in der paarweise die Beziehungen zwischen diesen Variablen zusammen mit den Korrelationskoeffizienten dargestellt werden.
+
+```{r}
+install.packages("GGally")
+library(GGally)
+data(mtcars)
+# Wählen der metrischen Variablen
+metrische_variabeln <- mtcars[, c("mpg", "hp", "wt", "qsec")]
+# Erstellen einer Matrix von Streudiagrammen mit Korrelationskoeffizienten
+ggpairs(metrische_variabeln)
+
+```
+
+#### Erklärung der Ergebnisse
+
+- **"mpg" und "hp"**: Es gibt eine negative Korrelation (-0.776), was darauf hindeutet, dass Autos mit höherer Leistung (mehr Pferdestärken) dazu neigen, weniger effizient im Kraftstoffverbrauch (weniger Meilen pro Gallone) zu sein.
+
+- **"mpg" und "wt"**: Die Korrelation ist ebenfalls negativ (-0.868), was darauf hinweist, dass schwerere Autos (höheres Gewicht) tendenziell einen höheren Kraftstoffverbrauch (weniger Meilen pro Gallone) aufweisen. Dies ist die stärkste Korrelation in der Matrix und impliziert einen starken umgekehrten Zusammenhang.
+
+- **"mpg" und "qsec"**: Die Korrelation ist positiv (0.419), was bedeutet, dass Autos, die länger brauchen, um eine Viertelmeile zurückzulegen (höherer qsec-Wert), tendenziell effizienter im Kraftstoffverbrauch sind (mehr Meilen pro Gallone). Diese Korrelation ist jedoch schwächer als die anderen und mit einem Sternchen markiert, was auf ein niedrigeres Signifikanzniveau hinweist.
+
+- **"hp" und "wt"**: Die Korrelation ist positiv (0.659), was anzeigt, dass schwerere Autos dazu neigen, mehr Pferdestärken zu haben.
+
+- **"hp" und "qsec"**: Hier besteht eine starke negative Korrelation (-0.708), die darauf hinweist, dass Autos mit mehr Pferdestärken schneller eine Viertelmeile zurücklegen können (niedrigerer qsec-Wert).
+
+- **"wt" und "qsec"**: Die Korrelation ist nicht signifikant (-0.175), was darauf hinweist, dass es keinen starken linearen Zusammenhang zwischen dem Gewicht eines Autos und der Zeit, die es braucht, um eine Viertelmeile zurückzulegen, gibt.
+
+
+### b) Auswahl eines Variablenpaares und Erstellung eines Streudiagramms
+
+Basierend auf den Erkenntnissen aus Aufgabe a wurde das Variablenpaar "mpg" (Meilen pro Gallone) und "wt" (Gewicht) für die weitere Analyse ausgewählt. Die Wahl fiel auf dieses Paar, da es die stärkste negative Korrelation (-0.868) in der Korrelationsmatrix aufwies, was auf einen starken umgekehrten Zusammenhang zwischen dem Gewicht der Autos und ihrem Kraftstoffverbrauch hindeutet. Ein Streudiagramm dieser beiden Variablen wird erstellt, um visuell den Zusammenhang zwischen dem Gewicht des Autos und dem Kraftstoffverbrauch zu untersuchen.
+
+
+```{r}
+# Wahl des Paares metrischer Variablen "mpg" und "wt"
+plot(mtcars$wt, mtcars$mpg, xlab = "Gewicht (wt)", ylab = "Meilen pro Gallone (mpg)", main = "Streudiagramm von Gewicht vs. MPG")
+
+```
+
+#### Streudiagramm von Gewicht vs. MPG
+
+Das Streudiagramm zeigt eine deutliche negative Beziehung zwischen dem Gewicht der Autos (X-Achse) und ihrem Kraftstoffverbrauch (Y-Achse). Wie wir aus der Korrelationsmatrix in Aufgabe a) wissen, beträgt der Korrelationskoeffizient für diese beiden Variablen -0.868, was auf eine starke negative Korrelation hindeutet. Dies wird im Streudiagramm visualisiert, wo man sehen kann, dass Autos mit geringerem Gewicht tendenziell mehr Meilen pro Gallone zurücklegen, während schwerere Autos weniger effizient sind. Diese visuelle Darstellung unterstützt die Entscheidung, "mpg" und "wt" für die lineare Regressionsanalyse zu verwenden, da sie stark darauf hindeutet, dass das Gewicht ein wichtiger Prädiktor für den Kraftstoffverbrauch ist.
+
+### c) Durchführung der linearen Einfachregression und Plot der diagnostischen Plots
+
+Nachdem die starke negative Korrelation zwischen "mpg" und "wt" im `mtcars` Datensatz sowohl durch die Korrelationsmatrix als auch das darauffolgende Streudiagramm bestätigt wurde, soll nun der Einfluss von "wt" auf "mpg" durch eine lineare Einfachregression näher quantifiziert werden. Dazu wird die `lm` Funktion in R genutzt, um ein lineares Modell zu erstellen, wobei "mpg" die abhängige Variable (Reaktion) und "wt" die unabhängige Variable darstellt. Der Modellbericht gibt Aufschluss über die Güte der Anpassung und die statistische Signifikanz der Regressionsergebnisse.
+
+
+```{r}
+# Erstellen des lineares Regressionsmodell
+model <- lm(mpg ~ wt, data = mtcars)
+# Modellbericht anzeigen
+summary(model)
+
+# Plotten der Residuen und QQ-Plot
+par(mfrow=c(2, 2)) # Einstellen des Plot-Bereichs
+plot(model)         # Erstellt automatisch 4 Diagnoseplots
+
+```
+
+#### Erklärung der Plots
+
+- **Residuals vs Fitted**: Dieser Plot zeigt keine klaren Muster oder systematischen Trends, was darauf hindeutet, dass das Modell keine systematischen Fehler aufweist. Die Residuen scheinen zufällig um die Nulllinie verteilt zu sein, was gut ist. Es gibt jedoch einige Punkte, die weiter von der Nulllinie entfernt liegen, was auf mögliche Ausreisser hinweist.
+
+- **Q-Q Plot der Residuen**: Die Punkte in diesem Plot folgen weitgehend der diagonalen Linie, was darauf hindeutet, dass die Residuen annähernd normalverteilt sind. Es gibt einige Abweichungen in den Extremen, was auf mögliche Ausreisser oder Schwanzverhalten hinweist, das von der Normalverteilung abweicht.
+
+- **Scale-Location **: Die gleichmässige Verteilung der Punkte in diesem Plot und das Fehlen eines erkennbaren Musters deuten darauf hin, dass die Varianz der Residuen über die Vorhersagewerte hinweg konstant ist, was für Homoskedastizität spricht. Es gibt keine klaren Anzeichen von Heteroskedastizität.
+
+- **Residuen vs Hebelwerte**: Dieser Plot zeigt keine Beobachtungen mit hohen Leverage-Werten, was darauf hindeutet, dass es keine besonders einflussreichen Datenpunkte gibt, die die Regression unverhältnismässig beeinflussen. Es gibt jedoch einige Punkte ausserhalb der Cook's Distanz Linie, was darauf hindeutet, dass es einige potentiell einflussreiche Beobachtungen gibt, die weitere Untersuchungen erfordern könnten.
+
+## Fazit
+
+Mit Hilfe von Korrelationsanalysen und Streudiagrammen konnten wir feststellen, dass ein stark negativer Zusammenhang zwischen dem Gewicht der Autos (wt) und ihrem Kraftstoffverbrauch (mpg) im `mtcars` Datensatz besteht. Dieses Ergebnis war statistisch signifikant und wurde durch die visuelle Inspektion der Daten bestätigt.
+
+Die durchgeführte lineare Einfachregression ergab ein Modell, das die Beziehung zwischen "mpg" und "wt" quantifiziert. Der Modellbericht und die diagnostischen Plots haben gezeigt, dass das Modell eine angemessene Passung hat, mit Residuen, die weitgehend keine systematischen Muster aufweisen und annähernd normalverteilt sind. Obwohl einige potenzielle Ausreisser und einflussreiche Beobachtungen identifiziert wurden, scheint das Modell insgesamt robust zu sein.
+
+Insgesamt liefert diese Untersuchung wertvolle Erkenntnisse über den Einfluss des Gewichts auf den Kraftstoffverbrauch und betont die Bedeutung der Überprüfung der Modellannahmen durch diagnostische Plots. Die Ergebnisse unterstreichen auch die Notwendigkeit, die Modellqualität kritisch zu betrachten und Ausreisser sowie einflussreiche Datenpunkte zu identifizieren, die die Ergebnisse verzerren könnten.
+
+Diese Analyse verdeutlicht, dass in der explorativen Datenanalyse sowohl grafische als auch quantitative Methoden Hand in Hand gehen, um ein umfassendes Verständnis der untersuchten Daten zu erlangen.
+
